@@ -1,0 +1,33 @@
+mqtt_pm_listener:
+  ros__parameters:
+    broker_host: "192.168.0.55"
+    broker_port: 1883
+    mqtt_topic: "sensor/pm/zoneA/#"
+    output_topic: "/dust/pm"
+    # auto: use paho-mqtt if installed, otherwise mosquitto_sub.
+    backend: "auto"
+
+dust_mapper:
+  ros__parameters:
+    pm_topic: "/dust/pm"
+    # amcl is preferred for map-frame dust mapping. Use "odom" only for short tests.
+    pose_source: "amcl"
+    amcl_pose_topic: "/amcl_pose"
+    odom_topic: "/odom"
+    map_yaml: "/home/woo/map_cleaned.yaml"
+    sampling_period_sec: 1.0
+    cell_size_m: 0.10
+    cells_topic: "/dust/cells"
+    csv_path: "/home/woo/group4_ws/dust_logs/dust_samples.csv"
+
+dust_map_viewer:
+  ros__parameters:
+    map_yaml: "/home/woo/map_cleaned.yaml"
+    cells_topic: "/dust/cells"
+    pm_topic: "/dust/pm"
+    robot_pose_topic: "/amcl_pose"
+    window_title: "Dust Map Viewer"
+    map_max_pixels: 720
+    heatmap_radius_m: 0.35
+    heatmap_alpha: 0.62
+    free_space_threshold: 245

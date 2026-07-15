@@ -1,0 +1,2037 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>로봇 관제 시스템</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f4f6f8;
+            color: #222;
+        }
+
+        header {
+            background: #1f2937;
+            color: white;
+            padding: 20px 40px;
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 28px;
+        }
+
+        .container {
+            padding: 30px 40px;
+        }
+
+        .section-title {
+            margin-top: 35px;
+            margin-bottom: 10px;
+            font-size: 22px;
+        }
+
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .sensor-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.07);
+        }
+
+        .card h2 {
+            margin-top: 0;
+            font-size: 18px;
+            color: #374151;
+        }
+
+        .value {
+            font-size: 28px;
+            font-weight: bold;
+            margin-top: 12px;
+        }
+
+        .sub {
+            margin-top: 20px;
+            color: #6b7280;
+        }
+
+        .button-area {
+            margin-top: 30px;
+        }
+
+        button {
+            padding: 14px 22px;
+            margin-right: 10px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            color: white;
+            background: #2563eb;
+        }
+
+        button.stop {
+            background: #dc2626;
+        }
+
+        button.charge {
+            background: #16a34a;
+        }
+
+        button.idle {
+            background: #6b7280;
+        }
+
+        button.estop {
+            background: #b91c1c;
+            font-weight: bold;
+        }
+
+        button.release {
+            background: #4b5563;
+        }
+
+        button.patrol {
+            background: #7c3aed;
+        }
+
+        button.clean {
+            background: #0891b2;
+        }
+
+        button:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+
+        .good {
+            color: #16a34a;
+        }
+
+        .normal {
+            color: #f59e0b;
+        }
+
+        .bad {
+            color: #dc2626;
+        }
+
+        .battery-good {
+            color: #16a34a;
+        }
+
+        .battery-normal {
+            color: #f59e0b;
+        }
+
+        .battery-bad {
+            color: #dc2626;
+        }
+
+        .battery-detail {
+            margin-top: 8px;
+            font-size: 14px;
+            color: #6b7280;
+            font-weight: normal;
+        }
+
+        .battery-warning {
+            margin-top: 8px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .battery-warning.good-text {
+            color: #16a34a;
+        }
+
+        .battery-warning.normal-text {
+            color: #f59e0b;
+        }
+
+        .battery-warning.bad-text {
+            color: #dc2626;
+        }
+
+        /* ============================= */
+        /* 지도 + 로봇 위치 표시 영역 */
+        /* ============================= */
+
+        .map-section {
+            margin-top: 35px;
+        }
+
+        .map-layout {
+            display: grid;
+            grid-template-columns: 560px 1fr;
+            gap: 20px;
+            align-items: start;
+            margin-top: 20px;
+        }
+
+        .robot-map-card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.07);
+        }
+
+        .robot-map-card h2 {
+            margin-top: 0;
+            font-size: 18px;
+            color: #374151;
+        }
+
+        .robot-map-wrapper {
+            position: relative;
+            width: 515px;
+            height: 630px;
+            background: #dddddd;
+            border: 1px solid #999999;
+            overflow: hidden;
+            cursor: crosshair;
+        }
+
+        #robotMapImage {
+            width: 515px;
+            height: 630px;
+            display: block;
+            image-rendering: pixelated;
+        }
+
+        #robotMarker {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 28px;
+            height: 28px;
+            transform: translate(-50%, -50%);
+            transform-origin: center center;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        #dustCanvas {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 515px;
+            height: 630px;
+            pointer-events: none;
+            z-index: 5;
+        }
+
+        #pathCanvas {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 515px;
+            height: 630px;
+            pointer-events: none;
+            z-index: 6;
+        }
+
+        .node-marker {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            border: 2px solid white;
+            transform: translate(-50%, -50%);
+            cursor: pointer;
+            box-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
+            z-index: 8;
+        }
+
+        .node-marker.node1,
+        .node-marker.node2,
+        .node-marker.node3 {
+            background: #2563eb;
+        }
+
+        .node-marker.home {
+            background: #f59e0b;
+        }
+
+        .node-marker .label {
+            position: absolute;
+            left: 14px;
+            top: -4px;
+            color: white;
+            font-size: 11px;
+            font-weight: 600;
+            text-shadow: 1px 1px 2px black;
+            white-space: nowrap;
+        }
+
+        .map-legend {
+            margin-top: 12px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: #4b5563;
+        }
+
+        .map-legend .swatch {
+            display: inline-block;
+            width: 16px;
+            height: 10px;
+            border-radius: 2px;
+            border: 1px solid rgba(0, 0, 0, 0.15);
+        }
+
+        .robot-dot {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            width: 14px;
+            height: 14px;
+            background: #2e7d32;
+            border: 3px solid #ffffff;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 6px rgba(0, 0, 0, 0.4);
+        }
+
+        .robot-heading {
+            position: absolute;
+            left: 50%;
+            top: 0;
+            width: 4px;
+            height: 17px;
+            background: #2e7d32;
+            transform: translateX(-50%);
+            border-radius: 4px;
+        }
+
+        .robot-pose-text {
+            margin-top: 10px;
+            font-size: 14px;
+            color: #374151;
+            line-height: 1.5;
+        }
+
+        .dust-test-panel {
+            margin-top: 14px;
+            padding: 14px;
+            border-radius: 10px;
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            font-size: 14px;
+            color: #374151;
+        }
+
+        .dust-test-title {
+            font-weight: 700;
+            color: #111827;
+        }
+
+        .dust-test-row {
+            margin-top: 10px;
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .dust-test-row label {
+            font-weight: 600;
+        }
+
+        .dust-test-row input {
+            width: 82px;
+            padding: 7px 8px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        button.test-dust {
+            background: #ea580c;
+            padding: 9px 14px;
+            font-size: 14px;
+        }
+
+        button.clear-dust {
+            background: #6b7280;
+            padding: 9px 14px;
+            font-size: 14px;
+        }
+
+        button.real-dust {
+            background: #2563eb;
+            padding: 9px 14px;
+            font-size: 14px;
+        }
+
+        .dust-test-help {
+            margin-top: 8px;
+            font-size: 12px;
+            color: #6b7280;
+            line-height: 1.5;
+        }
+
+        .map-info-card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.07);
+        }
+
+        .map-info-card h2 {
+            margin-top: 0;
+            font-size: 18px;
+            color: #374151;
+        }
+
+        .map-info-card ul {
+            padding-left: 20px;
+            line-height: 1.8;
+            color: #4b5563;
+        }
+
+        .map-info-card code {
+            background: #f3f4f6;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+
+
+        /* ============================= */
+        /* ROS 실시간 맵 + 카메라 영역 */
+        /* ============================= */
+
+        .ros-live-section {
+            margin-top: 35px;
+        }
+
+        .ros-live-card {
+            background: #111827;
+            color: #e5e7eb;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+        }
+
+        .ros-live-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 14px;
+            flex-wrap: wrap;
+        }
+
+        .ros-live-header h2 {
+            margin: 0;
+            font-size: 18px;
+            color: #f9fafb;
+        }
+
+        .ros-status-line {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: #9ca3af;
+        }
+
+        .ros-status-badge {
+            font-size: 12px;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-weight: 700;
+        }
+
+        .ros-status-badge.ok {
+            background: #065f46;
+            color: #d1fae5;
+        }
+
+        .ros-status-badge.bad {
+            background: #991b1b;
+            color: #fee2e2;
+        }
+
+        .ros-live-layout {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 360px;
+            gap: 16px;
+            align-items: start;
+        }
+
+        .ros-viewer-box {
+            min-height: 520px;
+            border-radius: 10px;
+            overflow: hidden;
+            background: #0f172a;
+            border: 1px solid #374151;
+        }
+
+        #ros3dViewer {
+            width: 100%;
+            height: 520px;
+        }
+
+        .ros-camera-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .ros-cam-card {
+            background: #0f172a;
+            border: 1px solid #374151;
+            border-radius: 10px;
+            padding: 10px;
+        }
+
+        .ros-cam-label-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 6px;
+            font-size: 12px;
+            color: #9ca3af;
+        }
+
+        .ros-topic-rate {
+            color: #60a5fa;
+            white-space: nowrap;
+        }
+
+        .ros-cam-card img {
+            width: 100%;
+            height: auto;
+            display: block;
+            border-radius: 6px;
+            background: #000;
+        }
+
+        .ros-cam-placeholder {
+            width: 100%;
+            aspect-ratio: 4 / 3;
+            border-radius: 6px;
+            background: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #6b7280;
+            font-size: 12px;
+        }
+
+        .ros-display-options {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px 14px;
+            margin-top: 14px;
+            color: #d1d5db;
+            font-size: 13px;
+        }
+
+        .ros-display-options label {
+            cursor: pointer;
+        }
+
+        .ros-display-options input[type=checkbox] {
+            accent-color: #60a5fa;
+            margin-right: 4px;
+        }
+
+        .ros-live-help {
+            margin-top: 10px;
+            color: #9ca3af;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        @media (max-width: 1100px) {
+            .status-grid,
+            .sensor-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .map-layout {
+                grid-template-columns: 1fr;
+            }
+
+            .ros-live-layout {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 650px) {
+            .status-grid,
+            .sensor-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .container {
+                padding: 20px;
+            }
+
+            .robot-map-card {
+                overflow-x: auto;
+            }
+        }
+    </style>
+
+
+    <!-- ROS 실시간 맵/카메라 표시용 라이브러리
+         주의: ros3d@1.1.0은 최신 three.js(0.149 등)와 충돌할 수 있어서 three@0.89.0을 사용합니다. -->
+    <script src="https://cdn.jsdelivr.net/npm/eventemitter2@6.4.9/lib/eventemitter2.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/roslib@1.4.1/build/roslib.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.89.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ros3d@1.1.0/build/ros3d.min.js"></script>
+</head>
+<body>
+
+<header>
+    <h1>로봇 관제 시스템</h1>
+</header>
+
+<div class="container">
+    <h2>대시보드</h2>
+    <p>Spring Boot, MySQL, JavaScript가 연결된 상태입니다.</p>
+
+    <h2 class="section-title">로봇 상태</h2>
+
+    <div class="status-grid">
+        <div class="card">
+            <h2>로봇 이름</h2>
+            <div class="value" id="robotName" th:text="${robotStatus.robotName}">TurtleBot3</div>
+        </div>
+
+        <div class="card">
+            <h2>로봇 상태</h2>
+            <div class="value" id="robotStatus" th:text="${robotStatus.status}">대기중</div>
+        </div>
+
+        <div class="card">
+            <h2>배터리</h2>
+            <div class="value" id="batteryBox">
+                <span id="battery" th:text="${robotStatus.battery}">85</span>%
+            </div>
+            <div class="battery-detail">
+                전압:
+                <span id="batteryVoltage">-</span>V /
+                상태:
+                <span id="batteryPresent">확인중</span>
+            </div>
+            <div class="battery-warning normal-text" id="batteryWarning">
+                배터리 상태 확인중
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>최근 업데이트</h2>
+            <div class="value" style="font-size: 18px;" id="robotUpdatedAt"
+                 th:text="${robotStatus.updatedAt}">2026-04-29T15:00:00</div>
+        </div>
+    </div>
+
+    <div class="button-area">
+        <button id="startButton" onclick="sendCommand('start')">이동 시작</button>
+        <button class="stop" onclick="sendCommand('stop')">정지</button>
+        <button class="charge" onclick="sendCommand('charge')">충전소 이동</button>
+        <button class="idle" onclick="sendCommand('idle')">대기 상태</button>
+        <button class="patrol" id="patrolButton" onclick="sendCommand('patrol')">순찰 (1→2→3→홈)</button>
+        <button class="clean" onclick="sendCommand('clean')">청정 ON</button>
+        <button class="estop" onclick="sendCommand('estop')">⛔ 비상정지</button>
+        <button class="release" onclick="sendCommand('release')">비상정지 해제</button>
+    </div>
+
+    <div class="map-section">
+        <h2 class="section-title">실내 지도 / 로봇 현재 위치</h2>
+
+        <div class="map-layout">
+            <div class="robot-map-card">
+                <h2>지도</h2>
+
+                <div class="robot-map-wrapper" id="robotMapWrapper">
+                    <img src="/map/map_cleaned.png" id="robotMapImage" alt="로봇 지도">
+
+                    <canvas id="dustCanvas" width="515" height="630"></canvas>
+                    <canvas id="pathCanvas" width="515" height="630"></canvas>
+
+                    <div class="node-marker home" id="markerHome" title="홈">
+                        <div class="label">홈</div>
+                    </div>
+                    <div class="node-marker node1" id="markerNode1" title="노드 1">
+                        <div class="label">N1</div>
+                    </div>
+                    <div class="node-marker node2" id="markerNode2" title="노드 2">
+                        <div class="label">N2</div>
+                    </div>
+                    <div class="node-marker node3" id="markerNode3" title="노드 3">
+                        <div class="label">N3</div>
+                    </div>
+
+                    <div id="robotMarker">
+                        <div class="robot-dot"></div>
+                        <div class="robot-heading"></div>
+                    </div>
+                </div>
+
+                <div class="robot-pose-text" id="robotPoseText">
+                    Robot: waiting...
+                </div>
+
+                <div class="robot-pose-text" id="pathStatusText">
+                    Path: waiting...
+                </div>
+
+                <div class="dust-test-panel">
+                    <div class="dust-test-title">히트맵 테스트 입력</div>
+
+                    <div class="dust-test-row">
+                        <label for="testPm10">PM10</label>
+                        <input type="number" id="testPm10" min="0" max="100" step="1" value="30">
+
+                        <label for="testCount">count</label>
+                        <input type="number" id="testCount" min="1" max="50" step="1" value="10">
+                    </div>
+
+                    <div class="dust-test-row">
+                        <label for="testDustX">X</label>
+                        <input type="number" id="testDustX" step="0.1" value="2.35">
+
+                        <label for="testDustY">Y</label>
+                        <input type="number" id="testDustY" step="0.1" value="-2.70">
+                    </div>
+
+                    <div class="dust-test-row">
+                        <button type="button" class="test-dust" onclick="applyTestDust()">테스트 히트맵 적용</button>
+                        <button type="button" class="clear-dust" onclick="clearTestDust()">히트맵 지우기</button>
+                        <button type="button" class="real-dust" onclick="resumeRealDust()">실제 데이터 다시 받기</button>
+                    </div>
+
+                    <div class="dust-test-help" id="dustTestStatus">
+                        테스트 값을 넣으면 실제 MQTT 데이터와 상관없이 화면에서만 히트맵을 확인합니다.
+                    </div>
+                </div>
+
+                <div class="map-legend">
+                    <span>맵 클릭 → 그 좌표로 이동</span>
+                    <span style="margin-left:8px; color:#2563eb; font-weight:700;">━ A* Path</span>
+                    <span style="margin-left:8px;">PM10:</span>
+                    <span class="swatch" style="background:rgb(30,136,229)"></span>0
+                    <span class="swatch" style="background:rgb(0,188,212)"></span>5
+                    <span class="swatch" style="background:rgb(67,160,71)"></span>10
+                    <span class="swatch" style="background:rgb(253,216,53)"></span>15
+                    <span class="swatch" style="background:rgb(251,140,0)"></span>20
+                    <span class="swatch" style="background:rgb(239,83,80)"></span>25
+                    <span class="swatch" style="background:rgb(183,28,28)"></span>30+
+                </div>
+            </div>
+
+            <div class="map-info-card">
+                <h2>지도 좌표 정보</h2>
+                <ul>
+                    <li>지도 이미지: <code>/map/map_cleaned.png</code></li>
+                    <li>지도 크기: <code>103 x 126 px</code></li>
+                    <li>해상도: <code>0.05 m/px</code></li>
+                    <li>Origin X: <code>-1.78</code></li>
+                    <li>Origin Y: <code>-5.08</code></li>
+                    <li>현재 로봇 위치는 <code>/api/robot/pose</code>에서 가져옵니다.</li>
+                    <li>현재 배터리 값은 <code>/api/robot/battery</code>에서 가져옵니다.</li>
+                    <li>배터리 20% 미만이면 이동 시작 버튼이 자동으로 비활성화됩니다.</li>
+                    <li>ROS2 <code>/amcl_pose</code> → MQTT <code>robot/1/pose</code> → Spring Boot → Web 순서로 표시됩니다.</li>
+                    <li>ROS2 <code>/battery_state</code> → MQTT <code>robot/1/battery</code> → Spring Boot → Web 순서로 표시됩니다.</li>
+                    <li>ROS2 <code>/dust/cells</code> → MQTT <code>robot/1/dust</code> → Spring Boot → Web 순서로 PM10 히트맵을 그립니다.</li>
+                    <li>ROS2 <code>/astar_path</code> → MQTT <code>robot/1/path</code> → Spring Boot → Web 순서로 A* 경로를 그립니다.</li>
+                    <li>현재 Path 값은 <code>/api/robot/path</code>에서 가져옵니다.</li>
+                    <li>맵 클릭 시 해당 좌표로 <code>GOTO_XY:x,y</code> 명령을 발행합니다 (yaw 자동).</li>
+                    <li>노드 마커(N1/N2/N3/홈) 클릭 시 해당 노드로 이동 명령을 보냅니다.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+
+
+    <div class="ros-live-section">
+        <h2 class="section-title">ROS3D 실시간 맵 / 단일 카메라</h2>
+
+        <div class="ros-live-card">
+            <div class="ros-live-header">
+                <h2>ROSBridge 실시간 화면</h2>
+                <div class="ros-status-line">
+                    <span id="rosConnStatus" class="ros-status-badge bad">disconnected</span>
+                    <span id="rosBridgeUrlText">ws://localhost:9090</span>
+                </div>
+            </div>
+
+            <div class="ros-live-layout">
+                <div>
+                    <div class="ros-viewer-box">
+                        <div id="ros3dViewer"></div>
+                    </div>
+
+                    <div class="ros-display-options">
+                        <label><input type="checkbox" id="showRosMap" checked>ROS3D 맵 /map</label>
+                        <label><input type="checkbox" id="showRosScan" checked>LiDAR /scan</label>
+                        <label><input type="checkbox" id="showRosRobot" checked>로봇 모델 /api/robot/pose</label>
+                    </div>
+
+                    <div class="ros-live-help" id="rosRobotModelText">
+                        Robot Model: waiting for /api/robot/pose
+                    </div>
+
+                    <div class="ros-live-help">
+                        기존 home.html 지도 기능은 그대로 유지하고, 이 영역은 ROS3D Viewer로 /map, /scan, /image_raw/compressed 카메라 이미지와 /api/robot/pose 기준 로봇 모델을 표시합니다. 마우스 드래그로 회전, 휠로 확대/축소할 수 있습니다.
+                    </div>
+                </div>
+
+                <div class="ros-camera-panel">
+                    <div class="ros-cam-card">
+                        <div class="ros-cam-label-row">
+                            <span>Camera (/image_raw/compressed)</span>
+                            <span id="homeCameraRate" class="ros-topic-rate">— Hz</span>
+                        </div>
+                        <div id="homeCameraPlaceholder" class="ros-cam-placeholder">대기 중...</div>
+                        <img id="homeCameraImg" alt="camera" style="display:none">
+                    </div>
+
+                    <div class="ros-cam-card">
+                        <div style="font-size:12px; color:#9ca3af; line-height:1.5;">
+                            AirCleanGui에서 쓰는 단일 카메라 토픽과 맞춰서 /image_raw/compressed 하나만 구독합니다.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <h2 class="section-title">미세먼지 센서</h2>
+
+    <div class="sensor-grid">
+        <div class="card">
+            <h2>구역</h2>
+            <div class="value" id="zone" th:text="${pmSensorData.zone}">zoneA</div>
+        </div>
+
+        <div class="card">
+            <h2>PM1.0</h2>
+            <div class="value">
+                <span id="pm1_0" th:text="${pmSensorData.pm1_0}">0</span>
+                <span style="font-size: 18px;">㎍/㎥</span>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>PM2.5</h2>
+            <div class="value" id="pm25Box">
+                <span id="pm2_5" th:text="${pmSensorData.pm2_5}">0</span>
+                <span style="font-size: 18px;">㎍/㎥</span>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>PM10</h2>
+            <div class="value">
+                <span id="pm10" th:text="${pmSensorData.pm10}">0</span>
+                <span style="font-size: 18px;">㎍/㎥</span>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>RSSI</h2>
+            <div class="value">
+                <span id="rssi" th:text="${pmSensorData.rssi}">0</span>
+                <span style="font-size: 18px;">dBm</span>
+            </div>
+        </div>
+    </div>
+
+    <p class="sub">
+        센서 최근 업데이트:
+        <span id="sensorCreatedAt" th:text="${pmSensorData.createdAt}">데이터 없음</span>
+    </p>
+</div>
+
+
+<script th:inline="javascript">
+    window.ROSBRIDGE_URL = /*[[${rosbridgeUrl}]]*/ 'ws://localhost:9090';
+</script>
+
+<script>
+    /*
+     * map_cleaned.yaml 기준:
+     * resolution: 0.05
+     * origin: [-1.78, -5.08, 0]
+     *
+     * map_cleaned.pgm/png 크기:
+     * width = 103px
+     * height = 126px
+     */
+    const MAP_INFO = {
+        width: 103,
+        height: 126,
+        resolution: 0.05,
+        originX: -1.78,
+        originY: -5.08,
+        scale: 5
+    };
+
+    /*
+     * 노드 좌표는 air_clean_params.yaml 의 manual_nav_controller 값과 동일.
+     * 마커 클릭 시 cmd 필드의 명령(node1/2/3/home)을 그대로 발행.
+     */
+    const NODES = [
+        { id: 'markerHome',  cmd: 'home',  worldX:  0.0417, worldY: -0.0379, label: '홈' },
+        { id: 'markerNode1', cmd: 'node1', worldX:  2.3018, worldY: -0.0080, label: '노드 1' },
+        { id: 'markerNode2', cmd: 'node2', worldX:  2.3524, worldY: -2.7042, label: '노드 2' },
+        { id: 'markerNode3', cmd: 'node3', worldX: -0.0914, worldY: -2.5292, label: '노드 3' }
+    ];
+
+    /*
+     * PM10 히트맵 색상 단계.
+     * Python dust_map_viewer의 색감을 유지하면서 중간 단계를 더 촘촘하게 넣음.
+     */
+    const PM10_STOPS = [
+        [0,    [30, 136, 229]],
+        [2.5,  [20, 162, 221]],
+        [5,    [0, 188, 212]],
+        [7.5,  [34, 174, 142]],
+        [10,   [67, 160, 71]],
+        [12.5, [160, 188, 62]],
+        [15,   [253, 216, 53]],
+        [17.5, [252, 178, 27]],
+        [20,   [251, 140, 0]],
+        [22.5, [245, 112, 40]],
+        [25,   [239, 83, 80]],
+        [27.5, [211, 55, 54]],
+        [30,   [183, 28, 28]]
+    ];
+
+    /*
+     * 히트맵 크기 조절값.
+     * 기존 0.35m보다 약 2배 크게 0.70m로 설정.
+     * 넓어지면서 색이 너무 진해지는 것을 막기 위해 alpha는 0.58로 살짝 낮춤.
+     */
+    const HEATMAP_RADIUS_M = 0.70;
+    const HEATMAP_ALPHA = 0.58;
+
+    let latestDustPayload = null;
+    let latestPathPayload = null;
+
+    /*
+     * 테스트 모드가 true면 setInterval(loadDust)가 돌아도
+     * 실제 /api/robot/dust 값으로 테스트 히트맵을 덮어쓰지 않음.
+     */
+    let testDustMode = false;
+
+    async function sendCommand(command) {
+        const startButton = document.getElementById('startButton');
+        const patrolButton = document.getElementById('patrolButton');
+
+        if (command === 'start' && startButton && startButton.disabled) {
+            alert('배터리가 부족하여 이동 시작 명령을 보낼 수 없습니다.');
+            return;
+        }
+
+        if (command === 'patrol' && patrolButton && patrolButton.disabled) {
+            alert('배터리가 부족하여 순찰 명령을 보낼 수 없습니다.');
+            return;
+        }
+
+        if (command === 'estop') {
+            if (!confirm('정말 비상정지를 발동할까요?')) {
+                return;
+            }
+        }
+
+        try {
+            const response = await fetch(`/api/robot/command/${command}`, {
+                method: 'POST'
+            });
+
+            if (!response.ok) {
+                alert('명령 전송 실패');
+                return;
+            }
+
+            const data = await response.json();
+            updateRobotStatus(data);
+
+        } catch (error) {
+            console.error(error);
+            alert('서버 통신 중 오류가 발생했습니다.');
+        }
+    }
+
+    async function loadRobotStatus() {
+        try {
+            const response = await fetch('/api/robot/status');
+
+            if (!response.ok) {
+                return;
+            }
+
+            const data = await response.json();
+            updateRobotStatus(data);
+
+        } catch (error) {
+            console.error(error);
+        }
+    }
+
+    async function loadRobotPose() {
+        try {
+            const response = await fetch('/api/robot/pose');
+
+            if (!response.ok) {
+                document.getElementById('robotPoseText').textContent =
+                    'Robot: pose API error';
+                return;
+            }
+
+            const pose = await response.json();
+
+            if (
+                pose === null ||
+                pose.x === undefined ||
+                pose.y === undefined ||
+                pose.yaw === undefined
+            ) {
+                document.getElementById('robotPoseText').textContent =
+                    'Robot: pose data empty';
+                return;
+            }
+
+            updateRobotMarker(pose);
+            updateRos3dRobotFromPoseApi(pose);
+
+        } catch (error) {
+            console.error(error);
+            const poseText = document.getElementById('robotPoseText');
+
+            if (poseText) {
+                poseText.textContent = 'Robot: pose connection error';
+            }
+        }
+    }
+
+    async function loadRobotBattery() {
+        try {
+            const response = await fetch('/api/robot/battery');
+
+            if (!response.ok) {
+                return;
+            }
+
+            const battery = await response.json();
+
+            if (
+                battery === null ||
+                battery.percentage === undefined ||
+                battery.voltage === undefined
+            ) {
+                return;
+            }
+
+            updateBatteryDisplay(battery);
+
+        } catch (error) {
+            console.error(error);
+        }
+    }
+
+    async function loadPmSensorData() {
+        try {
+            const response = await fetch('/api/sensor/pm/latest');
+
+            if (!response.ok) {
+                return;
+            }
+
+            const data = await response.json();
+
+            document.getElementById('zone').textContent = data.zone;
+            document.getElementById('pm1_0').textContent = data.pm1_0;
+            document.getElementById('pm2_5').textContent = data.pm2_5;
+            document.getElementById('pm10').textContent = data.pm10;
+            document.getElementById('rssi').textContent = data.rssi;
+            document.getElementById('sensorCreatedAt').textContent = data.createdAt;
+
+            updatePm25Color(data.pm2_5);
+
+        } catch (error) {
+            console.error(error);
+        }
+    }
+
+    function updateRobotStatus(data) {
+        document.getElementById('robotName').textContent = data.robotName;
+        document.getElementById('robotStatus').textContent = data.status;
+        document.getElementById('robotUpdatedAt').textContent = data.updatedAt;
+
+        /*
+         * 배터리는 /api/robot/battery에서 실제 TurtleBot 값을 따로 가져온다.
+         * 그래서 여기서는 DB에 저장된 robotStatus.battery 값으로 덮어쓰지 않는다.
+         */
+    }
+
+    function setMoveButtonsDisabled(disabled) {
+        const startButton = document.getElementById('startButton');
+        const patrolButton = document.getElementById('patrolButton');
+
+        if (startButton) {
+            startButton.disabled = disabled;
+        }
+
+        if (patrolButton) {
+            patrolButton.disabled = disabled;
+        }
+    }
+
+    function updateBatteryDisplay(battery) {
+        const batteryBox = document.getElementById('batteryBox');
+        const batteryText = document.getElementById('battery');
+        const batteryVoltage = document.getElementById('batteryVoltage');
+        const batteryPresent = document.getElementById('batteryPresent');
+        const batteryWarning = document.getElementById('batteryWarning');
+
+        if (!batteryBox || !batteryText || !batteryVoltage || !batteryPresent) {
+            return;
+        }
+
+        const percentage = Number(battery.percentage);
+        const voltage = Number(battery.voltage);
+        const present = Boolean(battery.present);
+
+        batteryText.textContent = Math.round(percentage);
+        batteryVoltage.textContent = voltage.toFixed(2);
+        batteryPresent.textContent = present ? '정상' : '미인식';
+
+        batteryBox.classList.remove('battery-good', 'battery-normal', 'battery-bad');
+
+        if (batteryWarning) {
+            batteryWarning.classList.remove('good-text', 'normal-text', 'bad-text');
+        }
+
+        if (!present) {
+            batteryBox.classList.add('battery-bad');
+
+            if (batteryWarning) {
+                batteryWarning.textContent = '배터리 미인식 - 이동 제한';
+                batteryWarning.classList.add('bad-text');
+            }
+
+            setMoveButtonsDisabled(true);
+            return;
+        }
+
+        if (percentage >= 30) {
+            batteryBox.classList.add('battery-good');
+
+            if (batteryWarning) {
+                batteryWarning.textContent = '정상 운용 가능';
+                batteryWarning.classList.add('good-text');
+            }
+
+            setMoveButtonsDisabled(false);
+
+        } else if (percentage >= 20) {
+            batteryBox.classList.add('battery-normal');
+
+            if (batteryWarning) {
+                batteryWarning.textContent = '배터리 주의 - 장시간 주행 비추천';
+                batteryWarning.classList.add('normal-text');
+            }
+
+            setMoveButtonsDisabled(false);
+
+        } else {
+            batteryBox.classList.add('battery-bad');
+
+            if (batteryWarning) {
+                batteryWarning.textContent = '배터리 부족 - 이동 시작 제한';
+                batteryWarning.classList.add('bad-text');
+            }
+
+            setMoveButtonsDisabled(true);
+        }
+    }
+
+    function updatePm25Color(pm25) {
+        const pm25Box = document.getElementById('pm25Box');
+
+        pm25Box.classList.remove('good', 'normal', 'bad');
+
+        if (pm25 <= 15) {
+            pm25Box.classList.add('good');
+        } else if (pm25 <= 35) {
+            pm25Box.classList.add('normal');
+        } else {
+            pm25Box.classList.add('bad');
+        }
+    }
+
+    function worldToPixel(worldX, worldY) {
+        const pixelX = (worldX - MAP_INFO.originX) / MAP_INFO.resolution;
+        const pixelY = (worldY - MAP_INFO.originY) / MAP_INFO.resolution;
+
+        return {
+            x: pixelX * MAP_INFO.scale,
+            y: (MAP_INFO.height - pixelY) * MAP_INFO.scale
+        };
+    }
+
+    function radToDeg(rad) {
+        return rad * 180 / Math.PI;
+    }
+
+    function updateRobotMarker(pose) {
+        const marker = document.getElementById('robotMarker');
+        const poseText = document.getElementById('robotPoseText');
+
+        if (!marker || !poseText) {
+            return;
+        }
+
+        const pixel = worldToPixel(pose.x, pose.y);
+
+        marker.style.left = `${pixel.x}px`;
+        marker.style.top = `${pixel.y}px`;
+
+        /*
+         * ROS yaw:
+         * yaw = 0이면 map 좌표계에서 +x 방향.
+         * 웹 마커는 위쪽을 기준으로 보이기 때문에 90도 보정.
+         */
+        const headingDeg = -radToDeg(pose.yaw) + 90;
+
+        marker.style.transform =
+            `translate(-50%, -50%) rotate(${headingDeg}deg)`;
+
+        poseText.textContent =
+            `Robot: x=${Number(pose.x).toFixed(3)}, y=${Number(pose.y).toFixed(3)}, yaw=${Number(pose.yaw).toFixed(3)}`;
+    }
+
+    /* === A* path 표시 ============================================ */
+
+    async function loadPath() {
+        try {
+            const r = await fetch('/api/robot/path');
+
+            if (!r.ok) {
+                updatePathStatus('Path: API error');
+                return;
+            }
+
+            const text = await r.text();
+
+            if (!text || text === 'null') {
+                latestPathPayload = null;
+                renderPath();
+                updatePathStatus('Path: data empty');
+                return;
+            }
+
+            const data = JSON.parse(text);
+
+            /*
+             * 지원하는 형태:
+             * 1) { path: [{x, y, yaw}, ...], current_pose: {...} }
+             * 2) [{x, y, yaw}, ...]
+             */
+            if (Array.isArray(data)) {
+                latestPathPayload = { path: data };
+            } else {
+                latestPathPayload = data;
+            }
+
+            renderPath();
+
+        } catch (e) {
+            console.error(e);
+            updatePathStatus('Path: connection error');
+        }
+    }
+
+    function updatePathStatus(message) {
+        const el = document.getElementById('pathStatusText');
+
+        if (el) {
+            el.textContent = message;
+        }
+    }
+
+    function renderPath() {
+        const canvas = document.getElementById('pathCanvas');
+
+        if (!canvas) {
+            return;
+        }
+
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        if (!latestPathPayload || !Array.isArray(latestPathPayload.path)) {
+            return;
+        }
+
+        const path = latestPathPayload.path;
+
+        if (path.length < 2) {
+            updatePathStatus(`Path: ${path.length} point`);
+            return;
+        }
+
+        ctx.save();
+
+        /* 경로 외곽선: 지도 위에서 잘 보이도록 흰색을 먼저 굵게 그림 */
+        ctx.lineWidth = 7;
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
+        ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+        drawPathLine(ctx, path);
+
+        /* 실제 경로선 */
+        ctx.lineWidth = 4;
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
+        ctx.strokeStyle = 'rgba(37,99,235,0.95)';
+        drawPathLine(ctx, path);
+
+        /* 시작점 */
+        const start = worldToPixel(Number(path[0].x), Number(path[0].y));
+        ctx.beginPath();
+        ctx.fillStyle = 'rgba(22,163,74,0.95)';
+        ctx.arc(start.x, start.y, 5, 0, Math.PI * 2);
+        ctx.fill();
+
+        /* 도착점 */
+        const goal = worldToPixel(
+            Number(path[path.length - 1].x),
+            Number(path[path.length - 1].y)
+        );
+        ctx.beginPath();
+        ctx.fillStyle = 'rgba(220,38,38,0.95)';
+        ctx.arc(goal.x, goal.y, 6, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
+
+        const total = latestPathPayload.point_count ?? path.length;
+        const sent = latestPathPayload.sent_count ?? path.length;
+
+        updatePathStatus(`Path: ${sent}/${total} points, frame=${latestPathPayload.frame_id || 'unknown'}`);
+    }
+
+    function drawPathLine(ctx, path) {
+        ctx.beginPath();
+
+        let started = false;
+
+        for (const p of path) {
+            const wx = Number(p.x);
+            const wy = Number(p.y);
+
+            if (Number.isNaN(wx) || Number.isNaN(wy)) {
+                continue;
+            }
+
+            const px = worldToPixel(wx, wy);
+
+            if (!started) {
+                ctx.moveTo(px.x, px.y);
+                started = true;
+            } else {
+                ctx.lineTo(px.x, px.y);
+            }
+        }
+
+        if (started) {
+            ctx.stroke();
+        }
+    }
+
+    /* === dust 히트맵 ============================================== */
+
+    function pm10Color(v) {
+        const value = Math.max(0, Math.min(30, Number(v) || 0));
+
+        if (value <= PM10_STOPS[0][0]) {
+            return PM10_STOPS[0][1];
+        }
+
+        for (let i = 0; i < PM10_STOPS.length - 1; i++) {
+            const [startValue, startColor] = PM10_STOPS[i];
+            const [endValue, endColor] = PM10_STOPS[i + 1];
+
+            if (value <= endValue) {
+                const ratio = (value - startValue) / Math.max(1e-6, endValue - startValue);
+
+                return startColor.map((color, index) =>
+                    Math.round(color + (endColor[index] - color) * ratio)
+                );
+            }
+        }
+
+        return PM10_STOPS[PM10_STOPS.length - 1][1];
+    }
+
+    async function loadDust() {
+        /*
+         * 테스트 모드 중에는 실제 MQTT 기반 /api/robot/dust 데이터가
+         * 테스트 화면을 덮어쓰지 않도록 막는다.
+         */
+        if (testDustMode) {
+            return;
+        }
+
+        try {
+            const r = await fetch('/api/robot/dust');
+
+            if (!r.ok) {
+                return;
+            }
+
+            const text = await r.text();
+
+            if (!text || text === 'null') {
+                latestDustPayload = null;
+                renderDust();
+                return;
+            }
+
+            const data = JSON.parse(text);
+
+            if (data && Array.isArray(data.cells)) {
+                latestDustPayload = data;
+                renderDust();
+            }
+
+        } catch (e) {
+            console.error(e);
+        }
+    }
+
+    function renderDust() {
+        const canvas = document.getElementById('dustCanvas');
+
+        if (!canvas) {
+            return;
+        }
+
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        if (!latestDustPayload || !Array.isArray(latestDustPayload.cells)) {
+            return;
+        }
+
+        /*
+         * 기존 사각형 cell 방식 대신, 각 측정 지점 주변으로 부드럽게 퍼지는 히트맵.
+         * HEATMAP_RADIUS_M = 0.70 이므로 기존 0.35m 대비 약 2배 넓게 표시됨.
+         */
+        const radiusPx = Math.max(
+            10,
+            (HEATMAP_RADIUS_M / MAP_INFO.resolution) * MAP_INFO.scale
+        );
+
+        for (const cell of latestDustPayload.cells) {
+            const wx = Number(cell.x);
+            const wy = Number(cell.y);
+            const pm10 = Number(cell.pm10);
+            const count = Math.max(1, Number(cell.count) || 1);
+
+            if (Number.isNaN(wx) || Number.isNaN(wy) || Number.isNaN(pm10)) {
+                continue;
+            }
+
+            const pixel = worldToPixel(wx, wy);
+            const [r, g, b] = pm10Color(pm10);
+
+            /*
+             * count가 많을수록 중심부를 조금 더 진하게 표시.
+             * 히트맵 반경이 커졌기 때문에 최대 투명도는 0.58로 제한.
+             */
+            const centerAlpha = Math.min(
+                HEATMAP_ALPHA,
+                0.20 + Math.min(count, 20) * 0.022
+            );
+
+            const gradient = ctx.createRadialGradient(
+                pixel.x,
+                pixel.y,
+                0,
+                pixel.x,
+                pixel.y,
+                radiusPx
+            );
+
+            gradient.addColorStop(0.0, `rgba(${r}, ${g}, ${b}, ${centerAlpha})`);
+            gradient.addColorStop(0.25, `rgba(${r}, ${g}, ${b}, ${centerAlpha * 0.78})`);
+            gradient.addColorStop(0.50, `rgba(${r}, ${g}, ${b}, ${centerAlpha * 0.48})`);
+            gradient.addColorStop(0.75, `rgba(${r}, ${g}, ${b}, ${centerAlpha * 0.22})`);
+            gradient.addColorStop(1.0, `rgba(${r}, ${g}, ${b}, 0)`);
+
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(pixel.x, pixel.y, radiusPx, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+
+    function applyTestDust() {
+        const pm10Input = document.getElementById('testPm10');
+        const xInput = document.getElementById('testDustX');
+        const yInput = document.getElementById('testDustY');
+        const countInput = document.getElementById('testCount');
+
+        if (!pm10Input || !xInput || !yInput || !countInput) {
+            return;
+        }
+
+        const pm10 = Number(pm10Input.value);
+        const x = Number(xInput.value);
+        const y = Number(yInput.value);
+        const count = Math.max(1, Number(countInput.value) || 1);
+
+        if (Number.isNaN(pm10) || Number.isNaN(x) || Number.isNaN(y)) {
+            alert('PM10, X, Y 값을 숫자로 입력해주세요.');
+            return;
+        }
+
+        testDustMode = true;
+
+        /*
+         * 실제 MQTT robot/1/dust 데이터와 같은 형태로 만들어서
+         * 기존 renderDust()에 그대로 넣는다.
+         */
+        latestDustPayload = {
+            cell_size_m: 0.10,
+            cells: [
+                {
+                    x: x,
+                    y: y,
+                    pm10: pm10,
+                    count: count
+                }
+            ]
+        };
+
+        renderDust();
+
+        const pm10Text = document.getElementById('pm10');
+        const zoneText = document.getElementById('zone');
+        const sensorCreatedAt = document.getElementById('sensorCreatedAt');
+        const dustTestStatus = document.getElementById('dustTestStatus');
+
+        if (pm10Text) {
+            pm10Text.textContent = pm10;
+        }
+
+        if (zoneText) {
+            zoneText.textContent = 'test';
+        }
+
+        if (sensorCreatedAt) {
+            sensorCreatedAt.textContent = '테스트 입력값';
+        }
+
+        if (dustTestStatus) {
+            dustTestStatus.textContent =
+                `테스트 모드 ON: PM10=${pm10}, count=${count}, x=${x.toFixed(2)}, y=${y.toFixed(2)} / 실제 MQTT 데이터는 잠시 덮어쓰지 않습니다.`;
+        }
+    }
+
+    function clearTestDust() {
+        testDustMode = true;
+        latestDustPayload = null;
+        renderDust();
+
+        const sensorCreatedAt = document.getElementById('sensorCreatedAt');
+        const dustTestStatus = document.getElementById('dustTestStatus');
+
+        if (sensorCreatedAt) {
+            sensorCreatedAt.textContent = '테스트 히트맵 제거됨';
+        }
+
+        if (dustTestStatus) {
+            dustTestStatus.textContent =
+                '테스트 히트맵을 지웠습니다. 실제 데이터를 다시 받으려면 "실제 데이터 다시 받기"를 누르세요.';
+        }
+    }
+
+    function resumeRealDust() {
+        testDustMode = false;
+
+        const dustTestStatus = document.getElementById('dustTestStatus');
+
+        if (dustTestStatus) {
+            dustTestStatus.textContent =
+                '테스트 모드 OFF: 다시 /api/robot/dust 실제 데이터를 받아옵니다.';
+        }
+
+        loadDust();
+        loadPmSensorData();
+    }
+
+    /* === 노드 마커 + 맵 클릭 ===================================== */
+
+    function placeNodeMarkers() {
+        for (const n of NODES) {
+            const el = document.getElementById(n.id);
+
+            if (!el) {
+                continue;
+            }
+
+            const px = worldToPixel(n.worldX, n.worldY);
+
+            el.style.left = `${px.x}px`;
+            el.style.top = `${px.y}px`;
+
+            el.onclick = (ev) => {
+                ev.stopPropagation();
+
+                if (confirm(`${n.label} (${n.worldX.toFixed(2)}, ${n.worldY.toFixed(2)}) 으로 이동할까요?`)) {
+                    sendGoto(n.worldX, n.worldY);
+                }
+            };
+        }
+    }
+
+    async function sendGoto(x, y) {
+        const startButton = document.getElementById('startButton');
+
+        if (startButton && startButton.disabled) {
+            alert('배터리가 부족하여 이동 명령을 보낼 수 없습니다.');
+            return;
+        }
+
+        try {
+            const r = await fetch('/api/robot/goto', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ x: x, y: y })
+            });
+
+            const data = await r.json();
+
+            if (!r.ok || !data.ok) {
+                alert('이동 명령 거부됨: ' + (data.error || 'unknown'));
+                return;
+            }
+
+            if (data.robotStatus) {
+                updateRobotStatus(data.robotStatus);
+            }
+
+        } catch (err) {
+            console.error(err);
+            alert('서버 통신 오류');
+        }
+    }
+
+    function canvasToWorld(canvasX, canvasY) {
+        const worldX = canvasX / MAP_INFO.scale * MAP_INFO.resolution + MAP_INFO.originX;
+        const worldY = (MAP_INFO.height - canvasY / MAP_INFO.scale) * MAP_INFO.resolution + MAP_INFO.originY;
+
+        return {
+            x: worldX,
+            y: worldY
+        };
+    }
+
+    function handleMapClick(ev) {
+        const wrapper = document.getElementById('robotMapWrapper');
+
+        if (!wrapper) {
+            return;
+        }
+
+        const rect = wrapper.getBoundingClientRect();
+        const designW = MAP_INFO.width * MAP_INFO.scale;
+        const designH = MAP_INFO.height * MAP_INFO.scale;
+        const cx = (ev.clientX - rect.left) * (designW / rect.width);
+        const cy = (ev.clientY - rect.top) * (designH / rect.height);
+
+        if (cx < 0 || cx > designW || cy < 0 || cy > designH) {
+            return;
+        }
+
+        const w = canvasToWorld(cx, cy);
+
+        if (!confirm(`(${w.x.toFixed(2)}, ${w.y.toFixed(2)}) 으로 이동할까요?`)) {
+            return;
+        }
+
+        sendGoto(w.x, w.y);
+    }
+
+
+
+    /* === ROSBridge 실시간 맵 + 카메라 ============================ */
+
+    let rosLiveStarted = false;
+    let rosLiveObjects = {
+        viewer: null,
+        mapClient: null,
+        scanClient: null,
+        tfClient: null,
+        robotModel: null
+    };
+
+    function initRosLiveDashboard() {
+        if (rosLiveStarted) {
+            return;
+        }
+
+        rosLiveStarted = true;
+
+        const viewerDiv = document.getElementById('ros3dViewer');
+        const connBadge = document.getElementById('rosConnStatus');
+        const rosUrlText = document.getElementById('rosBridgeUrlText');
+
+        if (!viewerDiv || typeof ROSLIB === 'undefined' || typeof ROS3D === 'undefined' || typeof THREE === 'undefined') {
+            if (connBadge) {
+                connBadge.textContent = 'library error';
+                connBadge.className = 'ros-status-badge bad';
+            }
+            return;
+        }
+
+        const rosbridgeUrl = window.ROSBRIDGE_URL || 'ws://localhost:9090';
+
+        if (rosUrlText) {
+            rosUrlText.textContent = rosbridgeUrl;
+        }
+
+        const ros = new ROSLIB.Ros({ url: rosbridgeUrl });
+
+        ros.on('connection', () => {
+            if (connBadge) {
+                connBadge.textContent = 'connected';
+                connBadge.className = 'ros-status-badge ok';
+            }
+        });
+
+        ros.on('error', () => {
+            if (connBadge) {
+                connBadge.textContent = 'error';
+                connBadge.className = 'ros-status-badge bad';
+            }
+        });
+
+        ros.on('close', () => {
+            if (connBadge) {
+                connBadge.textContent = 'closed';
+                connBadge.className = 'ros-status-badge bad';
+            }
+        });
+
+        function getViewerSize() {
+            const rect = viewerDiv.getBoundingClientRect();
+            return {
+                width: Math.max(320, Math.floor(rect.width || viewerDiv.clientWidth || 800)),
+                height: 520
+            };
+        }
+
+        const size = getViewerSize();
+
+        const viewer = new ROS3D.Viewer({
+            divID: 'ros3dViewer',
+            width: size.width,
+            height: size.height,
+            antialias: true,
+            background: '#0f172a',
+            cameraPose: { x: 3, y: 3, z: 3 }
+        });
+
+        viewer.addObject(new ROS3D.Grid({
+            cellSize: 0.5,
+            num_cells: 40,
+            color: '#374151'
+        }));
+
+        const tfClient = new ROSLIB.TFClient({
+            ros: ros,
+            fixedFrame: 'map',
+            angularThres: 0.01,
+            transThres: 0.01,
+            rate: 10.0
+        });
+
+        const mapClient = new ROS3D.OccupancyGridClient({
+            ros: ros,
+            rootObject: viewer.scene,
+            continuous: true,
+            topic: '/map'
+        });
+
+        const scanClient = new ROS3D.LaserScan({
+            ros: ros,
+            tfClient: tfClient,
+            rootObject: viewer.scene,
+            topic: '/scan',
+            material: { size: 0.05, color: 0x00ff66 }
+        });
+
+        /*
+         * 안전형 로봇 모델 추가:
+         * TFClient/SceneNode 또는 /amcl_pose 웹 구독이 갱신되지 않는 경우가 있어,
+         * 위쪽 2D 지도와 동일하게 /api/robot/pose 값을 사용해서 3D 모델도 갱신한다.
+         */
+        let robotModel = null;
+        try {
+            robotModel = createSimpleTurtleBotModel();
+            robotModel.name = 'simple_turtlebot_amcl_model';
+            robotModel.visible = true;
+            viewer.scene.add(robotModel);
+            ros3dRobotModel = robotModel;
+
+            const robotText = document.getElementById('rosRobotModelText');
+            if (robotText) {
+                robotText.textContent = 'Robot Model: /api/robot/pose 대기 중';
+            }
+        } catch (e) {
+            console.error('[ROS3D Robot Model] init failed:', e);
+            const robotText = document.getElementById('rosRobotModelText');
+            if (robotText) {
+                robotText.textContent = 'Robot Model: init failed - console 확인 필요';
+            }
+        }
+
+        rosLiveObjects = { viewer, mapClient, scanClient, tfClient, robotModel };
+
+        window.addEventListener('resize', () => {
+            const resized = getViewerSize();
+            viewer.resize(resized.width, resized.height);
+        });
+
+        const showRosMap = document.getElementById('showRosMap');
+        const showRosScan = document.getElementById('showRosScan');
+        if (showRosMap) {
+            showRosMap.addEventListener('change', (e) => {
+                if (mapClient && mapClient.currentGrid) {
+                    mapClient.currentGrid.visible = e.target.checked;
+                }
+            });
+        }
+
+        if (showRosScan) {
+            showRosScan.addEventListener('change', (e) => {
+                if (scanClient && scanClient.points && scanClient.points.sn) {
+                    scanClient.points.sn.visible = e.target.checked;
+                }
+            });
+        }
+
+        const showRosRobot = document.getElementById('showRosRobot');
+        if (showRosRobot) {
+            showRosRobot.addEventListener('change', (e) => {
+                if (robotModel) {
+                    robotModel.visible = e.target.checked;
+                }
+            });
+        }
+
+        bindRosCamera(ros, '/image_raw/compressed', 'homeCameraImg', 'homeCameraPlaceholder', 'homeCameraRate');
+    }
+
+    function createSimpleTurtleBotModel() {
+        const group = new THREE.Group();
+        group.name = 'simple_turtlebot_model';
+
+        // 바닥 그림자
+        const shadow = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.24, 0.24, 0.012, 32),
+            new THREE.MeshBasicMaterial({ color: 0x020617, transparent: true, opacity: 0.45 })
+        );
+        shadow.rotation.x = Math.PI / 2;
+        shadow.position.z = 0.012;
+        group.add(shadow);
+
+        // 본체
+        const body = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.18, 0.18, 0.12, 32),
+            new THREE.MeshBasicMaterial({ color: 0x2563eb })
+        );
+        body.rotation.x = Math.PI / 2;
+        body.position.z = 0.09;
+        group.add(body);
+
+        // 상단 라이다
+        const lidar = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.07, 0.07, 0.07, 24),
+            new THREE.MeshBasicMaterial({ color: 0x111827 })
+        );
+        lidar.rotation.x = Math.PI / 2;
+        lidar.position.z = 0.19;
+        group.add(lidar);
+
+        // 전방 표시: ROS yaw=0은 +X 방향
+        const headingBar = new THREE.Mesh(
+            new THREE.BoxGeometry(0.32, 0.045, 0.045),
+            new THREE.MeshBasicMaterial({ color: 0xfacc15 })
+        );
+        headingBar.position.x = 0.16;
+        headingBar.position.z = 0.16;
+        group.add(headingBar);
+
+        const headingCone = new THREE.Mesh(
+            new THREE.ConeGeometry(0.075, 0.20, 20),
+            new THREE.MeshBasicMaterial({ color: 0xf97316 })
+        );
+        headingCone.rotation.z = -Math.PI / 2;
+        headingCone.position.x = 0.36;
+        headingCone.position.z = 0.16;
+        group.add(headingCone);
+
+        // 좌우 바퀴 느낌
+        const wheelMaterial = new THREE.MeshBasicMaterial({ color: 0x0f172a });
+        const leftWheel = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.05, 0.08), wheelMaterial);
+        leftWheel.position.y = 0.20;
+        leftWheel.position.z = 0.06;
+        group.add(leftWheel);
+
+        const rightWheel = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.05, 0.08), wheelMaterial);
+        rightWheel.position.y = -0.20;
+        rightWheel.position.z = 0.06;
+        group.add(rightWheel);
+
+        group.position.set(0, 0, 0);
+        return group;
+    }
+
+    function updateRos3dRobotFromPoseApi(pose) {
+        if (!ros3dRobotModel || !pose) {
+            return;
+        }
+
+        const x = Number(pose.x);
+        const y = Number(pose.y);
+        const yaw = Number(pose.yaw);
+
+        if (Number.isNaN(x) || Number.isNaN(y) || Number.isNaN(yaw)) {
+            return;
+        }
+
+        /*
+         * ROS3D OccupancyGridClient는 /map 좌표계를 그대로 사용한다.
+         * 따라서 /api/robot/pose의 map 기준 x, y, yaw를 그대로 넣는다.
+         * z는 맵 위에 로봇이 묻히지 않도록 살짝 올린다.
+         */
+        ros3dRobotModel.position.set(x, y, 0.10);
+        ros3dRobotModel.rotation.set(0, 0, yaw);
+
+        const showRosRobot = document.getElementById('showRosRobot');
+        if (showRosRobot) {
+            ros3dRobotModel.visible = showRosRobot.checked;
+        }
+
+        const statusEl = document.getElementById('rosRobotModelText');
+        if (statusEl) {
+            statusEl.textContent =
+                `Robot Model: /api/robot/pose x=${x.toFixed(3)}, y=${y.toFixed(3)}, yaw=${yaw.toFixed(3)} / 갱신됨`;
+        }
+    }
+
+    function getYawFromQuaternion(q) {
+        const x = Number(q.x) || 0;
+        const y = Number(q.y) || 0;
+        const z = Number(q.z) || 0;
+        const w = Number(q.w) || 1;
+        const siny = 2.0 * (w * z + x * y);
+        const cosy = 1.0 - 2.0 * (y * y + z * z);
+        return Math.atan2(siny, cosy);
+    }
+
+    function bindRosCamera(ros, topic, imgId, placeholderId, rateLabelId) {
+        const imgEl = document.getElementById(imgId);
+        const phEl = document.getElementById(placeholderId);
+        const rateEl = document.getElementById(rateLabelId);
+
+        if (!imgEl || !phEl || !rateEl) {
+            return;
+        }
+
+        let frames = 0;
+
+        const sub = new ROSLIB.Topic({
+            ros: ros,
+            name: topic,
+            messageType: 'sensor_msgs/msg/CompressedImage',
+            throttle_rate: 200,
+            queue_length: 1
+        });
+
+        sub.subscribe((msg) => {
+            const fmt = (msg.format || 'jpeg').toLowerCase().includes('png') ? 'png' : 'jpeg';
+            imgEl.src = `data:image/${fmt};base64,${msg.data}`;
+
+            if (imgEl.style.display === 'none') {
+                imgEl.style.display = 'block';
+                phEl.style.display = 'none';
+            }
+
+            frames += 1;
+        });
+
+        setInterval(() => {
+            rateEl.textContent = `${frames} Hz`;
+            frames = 0;
+        }, 1000);
+    }
+
+    /* === init ====================================================== */
+
+    function initDashboard() {
+        placeNodeMarkers();
+        initRosLiveDashboard();
+
+        const wrapper = document.getElementById('robotMapWrapper');
+
+        if (wrapper) {
+            wrapper.addEventListener('click', handleMapClick);
+        }
+
+        loadRobotStatus();
+        loadPmSensorData();
+        loadRobotPose();
+        loadRobotBattery();
+        loadDust();
+        loadPath();
+
+        setInterval(loadRobotStatus, 3000);
+        setInterval(loadPmSensorData, 3000);
+        setInterval(loadRobotPose, 500);
+        setInterval(loadRobotBattery, 1000);
+        setInterval(loadDust, 3000);
+        setInterval(loadPath, 500);
+    }
+
+    document.addEventListener('DOMContentLoaded', initDashboard);
+</script>
+
+</body>
+</html>

@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>로봇 3D 대시보드</title>
+    <style>
+        body { margin: 0; font-family: Arial, sans-serif; background: #1a1a1a; color: #eee; }
+        header { background: #1f2937; padding: 15px 30px; display: flex; align-items: center; gap: 20px; }
+        header h1 { margin: 0; font-size: 22px; }
+        .status { font-size: 13px; padding: 4px 10px; border-radius: 4px; }
+        .status.ok  { background: #065f46; color: #d1fae5; }
+        .status.bad { background: #991b1b; color: #fee2e2; }
+        .layout { display: grid; grid-template-columns: 240px 1fr 360px; height: calc(100vh - 60px); }
+        .sidebar { background: #111827; padding: 20px; overflow-y: auto; }
+        .sidebar h2 { font-size: 14px; color: #9ca3af; text-transform: uppercase; margin: 20px 0 8px; }
+        .sidebar h2:first-child { margin-top: 0; }
+        .sidebar label { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 14px; cursor: pointer; }
+        .sidebar input[type=checkbox] { accent-color: #60a5fa; }
+        .topic-rate { font-size: 11px; color: #6b7280; margin-left: 4px; }
+        #viewer { width: 100%; height: 100%; background: #0f172a; }
+        .camera-panel { background: #111827; padding: 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
+        .camera-panel h3 { font-size: 13px; color: #9ca3af; text-transform: uppercase; margin: 0 0 6px; }
+        .cam-card { background: #0f172a; border-radius: 8px; padding: 10px; }
+        .cam-card .label-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 12px; color: #9ca3af; }
+        .cam-card img { width: 100%; height: auto; display: block; border-radius: 4px; background: #000; }
+        .cam-card .placeholder { width: 100%; aspect-ratio: 4/3; background: #000; display: flex; align-items: center; justify-content: center; color: #4b5563; border-radius: 4px; font-size: 12px; }
+    </style>
+
+    <!-- Three.js + ROS libs (CDN) -->
+    <script src="https://cdn.jsdelivr.net/npm/eventemitter2@6.4.9/lib/eventemitter2.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/roslib@1.4.1/build/roslib.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ros3d@1.1.0/build/ros3d.min.js"></script>
+</head>
+<body>
+
+<header>
+    <h1>로봇 3D 대시보드</h1>
+    <span id="connStatus" class="status bad">disconnected</span>
+    <span id="rosUrl" style="font-size: 12px; color: #9ca3af;" th:text="${rosbridgeUrl}"></span>
+</header>
+
+<div class="layout">
+    <aside class="sidebar">
+        <h2>표시 항목</h2>
+        <label><input type="checkbox" id="showMap" checked> 2D 맵 (/map)</label>
+        <label><input type="checkbox" id="showScan" checked> LiDAR (/scan)</label>
+        <label><input type="checkbox" id="showCloud" checked> 스테레오 PointCloud (/points2)</label>
+        <label><input type="checkbox" id="showTf" checked> TF (좌표축)</label>
+        <label><input type="checkbox" id="showBillboard" checked> 카메라 표지판 (3D)</label>
+
+        <h2>토픽 상태</h2>
+        <div id="rates"></div>
+    </aside>
+
+    <main>
+        <div id="viewer"></div>
+    </main>
+
+    <aside class="camera-panel">
+        <h3>스테레오 카메라</h3>
+        <div class="cam-card">
+            <div class="label-row">
+                <span>Left (/left/image_rect/compressed)</span>
+                <span id="leftRate" class="topic-rate">— Hz</span>
+            </div>
+            <div id="leftPlaceholder" class="placeholder">대기 중...</div>
+            <img id="leftImg" alt="left camera" style="display:none">
+        </div>
+        <div class="cam-card">
+            <div class="label-row">
+                <span>Right (/right/image_rect/compressed)</span>
+                <span id="rightRate" class="topic-rate">— Hz</span>
+            </div>
+            <div id="rightPlaceholder" class="placeholder">대기 중...</div>
+            <img id="rightImg" alt="right camera" style="display:none">
+        </div>
+        <div class="cam-card">
+            <div class="label-row">
+                <span>PointCloud (/points2)</span>
+                <span id="pcRate" class="topic-rate">— Hz</span>
+            </div>
+            <div id="pcViewer" style="width:100%; aspect-ratio:4/3; background:#000; border-radius:4px;"></div>
+        </div>
+    </aside>
+</div>
+
+<script th:inline="javascript">
+    const ROSBRIDGE_URL = /*[[${rosbridgeUrl}]]*/ 'ws://localhost:9090';
+
+    const ros = new ROSLIB.Ros({ url: ROSBRIDGE_URL });
+
+    const connBadge = document.getElementById('connStatus');
+    ros.on('connection', () => {
+        connBadge.textContent = 'connected';
+        connBadge.className = 'status ok';
+    });
+    ros.on('error', () => {
+        connBadge.textContent = 'error';
+        connBadge.className = 'status bad';
+    });
+    ros.on('close', () => {
+        connBadge.textContent = 'closed';
+        connBadge.className = 'status bad';
+    });
+
+    // 3D Viewer (sidebar 240 + camera panel 360 = 600 total reserved)
+    function viewerWidth() { return window.innerWidth - 600; }
+    function viewerHeight() { return window.innerHeight - 60; }
+
+    const viewer = new ROS3D.Viewer({
+        divID: 'viewer',
+        width: viewerWidth(),
+        height: viewerHeight(),
+        antialias: true,
+        background: '#0f172a',
+        cameraPose: { x: 3, y: 3, z: 3 }
+    });
+    viewer.addObject(new ROS3D.Grid({ cellSize: 0.5, num_cells: 40, color: '#374151' }));
+
+    window.addEventListener('resize', () => {
+        viewer.resize(viewerWidth(), viewerHeight());
+    });
+
+    // TF client (frame chain map -> base_link -> left_camera_frame)
+    const tfClient = new ROSLIB.TFClient({
+        ros: ros,
+        fixedFrame: 'map',
+        angularThres: 0.01,
+        transThres: 0.01,
+        rate: 10.0
+    });
+
+    // ----- Displays (참조 보관해서 toggle 가능하게) -----
+    let mapClient, scanClient, cloudClient;
+
+    function makeMap() {
+        mapClient = new ROS3D.OccupancyGridClient({
+            ros: ros,
+            rootObject: viewer.scene,
+            continuous: true,
+            topic: '/map'
+        });
+    }
+    function makeScan() {
+        scanClient = new ROS3D.LaserScan({
+            ros: ros,
+            tfClient: tfClient,
+            rootObject: viewer.scene,
+            topic: '/scan',
+            material: { size: 0.05, color: 0x00ff66 }
+        });
+    }
+    function makeCloud() {
+        cloudClient = new ROS3D.PointCloud2({
+            ros: ros,
+            tfClient: tfClient,
+            rootObject: viewer.scene,
+            topic: '/points2',
+            material: { size: 0.03 },
+            max_pts: 50000
+        });
+    }
+
+    makeMap(); makeScan(); makeCloud();
+
+    document.getElementById('showMap').addEventListener('change', (e) => {
+        if (mapClient && mapClient.currentGrid) mapClient.currentGrid.visible = e.target.checked;
+    });
+    document.getElementById('showScan').addEventListener('change', (e) => {
+        scanClient.points.sn.visible = e.target.checked;
+    });
+    document.getElementById('showCloud').addEventListener('change', (e) => {
+        cloudClient.points.sn.visible = e.target.checked;
+    });
+
+    // ----- 3D 카메라 표지판 (left_camera_frame 위치에 plane으로 영상 띄움) -----
+    const billboardCanvas = document.createElement('canvas');
+    billboardCanvas.width = 320;
+    billboardCanvas.height = 240;
+    const billboardCtx = billboardCanvas.getContext('2d');
+    billboardCtx.fillStyle = '#000';
+    billboardCtx.fillRect(0, 0, 320, 240);
+    billboardCtx.fillStyle = '#4b5563';
+    billboardCtx.font = '16px sans-serif';
+    billboardCtx.fillText('Waiting for camera...', 70, 120);
+
+    const billboardTexture = new THREE.CanvasTexture(billboardCanvas);
+    billboardTexture.minFilter = THREE.LinearFilter;
+    const billboardMaterial = new THREE.MeshBasicMaterial({
+        map: billboardTexture,
+        side: THREE.DoubleSide,
+        transparent: false
+    });
+
+    // 실제 공간에서 표지판 크기 (40cm 폭, 4:3 비율)
+    const billboardWidth = 0.4;
+    const billboardHeight = billboardWidth * (240 / 320);
+    const billboardGeom = new THREE.PlaneGeometry(billboardWidth, billboardHeight);
+    const billboardMesh = new THREE.Mesh(billboardGeom, billboardMaterial);
+
+    // optical frame(+Z forward) 기준으로 카메라 앞 5cm에 배치, 영상이 카메라 정면을 향하게
+    billboardMesh.position.set(0, 0, 0.05);
+    // PlaneGeometry는 기본적으로 normal=+Z. optical frame에서 +Z가 forward라 그대로 OK.
+    // 단, 영상이 거울처럼 뒤집혀 보이지 않도록 좌우 플립
+    billboardMesh.scale.x = -1;
+
+    const billboardNode = new ROS3D.SceneNode({
+        frameID: 'left_camera_frame',
+        tfClient: tfClient,
+        object: billboardMesh
+    });
+    viewer.scene.add(billboardNode);
+
+    // 표지판 영상은 더 자주 업데이트 (10Hz) — 사이드 패널과 별개 구독
+    const billboardImg = new Image();
+    billboardImg.onload = () => {
+        billboardCtx.drawImage(billboardImg, 0, 0, 320, 240);
+        billboardTexture.needsUpdate = true;
+    };
+    const billboardSub = new ROSLIB.Topic({
+        ros: ros,
+        name: '/left/image_rect/compressed',
+        messageType: 'sensor_msgs/msg/CompressedImage',
+        throttle_rate: 100,
+        queue_length: 1
+    });
+    billboardSub.subscribe((msg) => {
+        const fmt = (msg.format || 'jpeg').toLowerCase().includes('png') ? 'png' : 'jpeg';
+        billboardImg.src = `data:image/${fmt};base64,${msg.data}`;
+    });
+
+    document.getElementById('showBillboard').addEventListener('change', (e) => {
+        billboardMesh.visible = e.target.checked;
+    });
+
+    // ----- 카메라 이미지 표시 (compressed JPEG -> <img> data URL) -----
+    function bindCamera(topic, imgId, placeholderId, rateLabelId) {
+        const imgEl = document.getElementById(imgId);
+        const phEl = document.getElementById(placeholderId);
+        const rateEl = document.getElementById(rateLabelId);
+        let frames = 0;
+
+        const sub = new ROSLIB.Topic({
+            ros: ros,
+            name: topic,
+            messageType: 'sensor_msgs/msg/CompressedImage',
+            // throttle_rate: 카메라가 30Hz로 와도 200ms 간격(=5Hz)만 표시 — 브라우저 부하 절감
+            throttle_rate: 200,
+            queue_length: 1
+        });
+        sub.subscribe((msg) => {
+            // msg.data는 base64 문자열 (rosbridge가 자동 인코딩)
+            // msg.format은 'jpeg' 또는 'png' (camera_info에 따라)
+            const fmt = (msg.format || 'jpeg').toLowerCase().includes('png') ? 'png' : 'jpeg';
+            imgEl.src = `data:image/${fmt};base64,${msg.data}`;
+            if (imgEl.style.display === 'none') {
+                imgEl.style.display = 'block';
+                phEl.style.display = 'none';
+            }
+            frames += 1;
+        });
+
+        setInterval(() => {
+            rateEl.textContent = `${frames} Hz`;
+            frames = 0;
+        }, 1000);
+    }
+    bindCamera('/left/image_rect/compressed',  'leftImg',  'leftPlaceholder',  'leftRate');
+    bindCamera('/right/image_rect/compressed', 'rightImg', 'rightPlaceholder', 'rightRate');
+
+    // ----- 작은 PointCloud2 3D viewer (사이드 패널) -----
+    function pcViewerSize() {
+        const el = document.getElementById('pcViewer');
+        const w = el.clientWidth || 320;
+        return { w, h: Math.round(w * 3 / 4) };
+    }
+    const pcSize0 = pcViewerSize();
+    const pcViewer = new ROS3D.Viewer({
+        divID: 'pcViewer',
+        width: pcSize0.w,
+        height: pcSize0.h,
+        antialias: true,
+        background: '#000',
+        cameraPose: { x: 1.5, y: 0, z: 1.0 }
+    });
+    pcViewer.addObject(new ROS3D.Grid({ cellSize: 0.5, num_cells: 20, color: '#374151' }));
+    new ROS3D.PointCloud2({
+        ros: ros,
+        tfClient: tfClient,
+        rootObject: pcViewer.scene,
+        topic: '/points2',
+        material: { size: 0.03 },
+        max_pts: 50000
+    });
+    window.addEventListener('resize', () => {
+        const s = pcViewerSize();
+        pcViewer.resize(s.w, s.h);
+    });
+
+    // /points2 Hz 카운터 (cam-card 위)
+    let pcFrames = 0;
+    new ROSLIB.Topic({
+        ros, name: '/points2', messageType: 'sensor_msgs/msg/PointCloud2', throttle_rate: 100
+    }).subscribe(() => { pcFrames += 1; });
+    setInterval(() => {
+        document.getElementById('pcRate').textContent = `${pcFrames} Hz`;
+        pcFrames = 0;
+    }, 1000);
+
+    // ----- Hz 모니터링 -----
+    const ratesEl = document.getElementById('rates');
+    const rateMap = {};
+    function track(topic, type) {
+        rateMap[topic] = { count: 0, last: 0 };
+        const sub = new ROSLIB.Topic({ ros, name: topic, messageType: type, throttle_rate: 100 });
+        sub.subscribe(() => { rateMap[topic].count += 1; });
+    }
+    track('/scan',     'sensor_msgs/msg/LaserScan');
+    track('/points2',  'sensor_msgs/msg/PointCloud2');
+    track('/map',      'nav_msgs/msg/OccupancyGrid');
+    track('/amcl_pose','geometry_msgs/msg/PoseWithCovarianceStamped');
+
+    setInterval(() => {
+        let html = '';
+        for (const [t, st] of Object.entries(rateMap)) {
+            const rate = (st.count / 1.0).toFixed(1);
+            html += `<div>${t} <span class="topic-rate">${rate} Hz</span></div>`;
+            st.count = 0;
+        }
+        ratesEl.innerHTML = html;
+    }, 1000);
+</script>
+</body>
+</html>
